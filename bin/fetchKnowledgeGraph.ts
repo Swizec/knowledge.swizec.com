@@ -9,11 +9,11 @@ try {
     // We get all articles then fetch related for each and make nodes
     // This approach is N+1 but that's likely faster than a self-join
     const { rows: articles } =
-        await client.sql`select url, title from article_embeddings`;
+        await client.sql`select url, title, published_date from article_embeddings`;
 
     const nodes = [];
 
-    for (const { url, title } of articles) {
+    for (const { url, title, published_date } of articles) {
         console.log(`Fetching ${url}`);
 
         const { rows } =
@@ -22,13 +22,14 @@ try {
         const node = {
             url,
             title,
+            published_date,
             relatedArticles: rows,
         };
 
         nodes.push(node);
     }
 
-    Bun.write("src/knowledgeGraph.json", JSON.stringify(nodes));
+    Bun.write("public/knowledgeGraph.json", JSON.stringify(nodes));
 } catch (e) {
     console.error(e);
     throw e;
