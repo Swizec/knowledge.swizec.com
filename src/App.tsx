@@ -22,6 +22,9 @@ type KnowledgeGraph = {
 
 export type D3RenderFunction = (anchor: HTMLElement | null) => void;
 
+const width = 2048,
+    height = 1024;
+
 function useD3(render: D3RenderFunction) {
     const refAnchor = useRef(null);
 
@@ -32,20 +35,12 @@ function useD3(render: D3RenderFunction) {
     return refAnchor;
 }
 
-function Graph(props: { nodes: Article[]; links: Link[] }) {
-    const width = 1024,
-        height = 600;
+function clamp(x: number, lo: number, hi: number) {
+    return x < lo ? lo : x > hi ? hi : x;
+}
 
-    // The force simulation mutates links and nodes, so create a copy
-    // so that re-evaluating this cell produces the same result.
-    const links = props.links.map((d) => ({ ...d }));
-    const nodes: (Article & d3.SimulationNodeDatum)[] = props.nodes.map(
-        (d) => ({
-            ...d,
-        })
-    );
-
-    const refAnchor = useD3((anchor) => {
+function d3Graph(nodes: (Article & d3.SimulationNodeDatum)[], links: Link[]) {
+    return (anchor) => {
         const g = d3.select(anchor);
 
         const simulation = d3
@@ -69,7 +64,13 @@ function Graph(props: { nodes: Article[]; links: Link[] }) {
             .data(nodes)
             .join("circle")
             .attr("r", 12)
-            .classed("node", true);
+            .attr("title", (d) => `${d.title}, ${d.published_date}`)
+            .classed("node", true)
+            .classed("fixed", (d) => d.fx !== undefined);
+
+        const drag = d3.drag().on("start", dragstart).on("drag", dragged);
+
+        node.call(drag).on("click", click);
 
         function tick() {
             link.attr("x1", (d) => d.source.x)
@@ -78,7 +79,37 @@ function Graph(props: { nodes: Article[]; links: Link[] }) {
                 .attr("y2", (d) => d.target.y);
             node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
         }
-    });
+
+        function click(event, d) {
+            delete d.fx;
+            delete d.fy;
+            d3.select(this).classed("fixed", false);
+            simulation.alpha(1).restart();
+        }
+
+        function dragstart() {
+            d3.select(this).classed("fixed", true);
+        }
+
+        function dragged(event, d) {
+            d.fx = clamp(event.x, 0, width);
+            d.fy = clamp(event.y, 0, height);
+            simulation.alpha(1).restart();
+        }
+    };
+}
+
+function Graph(props: { nodes: Article[]; links: Link[] }) {
+    // The force simulation mutates links and nodes, so create a copy
+    // so that re-evaluating this cell produces the same result.
+    const links = props.links.map((d) => ({ ...d }));
+    const nodes: (Article & d3.SimulationNodeDatum)[] = props.nodes.map(
+        (d) => ({
+            ...d,
+        })
+    );
+
+    const refAnchor = useD3(d3Graph(nodes, links));
 
     console.log(props);
 
