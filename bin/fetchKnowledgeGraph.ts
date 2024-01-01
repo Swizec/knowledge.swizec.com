@@ -12,24 +12,31 @@ try {
         await client.sql`select url, title, published_date from article_embeddings`;
 
     const nodes = [];
+    const links = [];
 
     for (const { url, title, published_date } of articles) {
         console.log(`Fetching ${url}`);
 
         const { rows } =
-            await client.sql`select url, title, published_date from article_embeddings where url <> ${url} order by embedding <-> (select embedding from article_embeddings where url = ${url} limit 1) asc, published_date desc limit 5`;
+            await client.sql`select url, embedding <-> (select embedding from article_embeddings where url = ${url} limit 1) as distance from article_embeddings where url <> ${url} order by embedding <-> (select embedding from article_embeddings where url = ${url} limit 1) asc, published_date desc limit 5`;
 
         const node = {
-            url,
+            id: url,
             title,
             published_date,
-            relatedArticles: rows,
         };
-
         nodes.push(node);
+
+        for (const row of rows) {
+            links.push({
+                source: url,
+                target: row.url,
+                value: row.distance,
+            });
+        }
     }
 
-    Bun.write("public/knowledgeGraph.json", JSON.stringify(nodes));
+    Bun.write("public/knowledgeGraph.json", JSON.stringify({ nodes, links }));
 } catch (e) {
     console.error(e);
     throw e;
